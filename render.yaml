@@ -1,0 +1,6 @@
+services:
+  - type: web
+    name: epias-api
+    env: python
+    buildCommand: ""
+    startCommand: "python app.py"
