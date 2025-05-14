@@ -123,8 +123,10 @@ def predict_production():
         future_weather = Hourly(station_id, start_future, end_future).fetch()
         future_weather = future_weather[(future_weather.index.hour >= 3) & (future_weather.index.hour <= 17)]
         future_weather = future_weather.drop(columns=['snow', 'wdir', 'wpgt', 'tsun'], errors='ignore')
-        future_weather["hour"] = future_weather.index.hour
-        future_weather["day_of_year"] = future_weather.index.dayof_year
+        future_weather = future_weather.reset_index().rename(columns={"time": "date"})
+        future_weather["date"] = pd.to_datetime(future_weather["date"]).dt.tz_localize(None)
+        future_weather["hour"] = future_weather["date"].dt.hour
+        future_weather["day_of_year"] = future_weather["date"].dt.dayofyear
         future_weather["epsilon"] = 1 + 0.033 * np.cos((2 * np.pi * future_weather["day_of_year"]) / 365)
         future_weather["cos_theta"] = np.maximum(0, np.cos((np.pi / 12) * (future_weather["hour"] - 12)))
         future_weather["G0"] = future_weather["epsilon"] * G_sc * future_weather["cos_theta"]
