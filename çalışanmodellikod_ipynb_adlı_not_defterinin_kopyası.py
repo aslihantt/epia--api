@@ -1,27 +1,29 @@
 from flask import Flask, request, jsonify
 from eptr2 import EPTR2
-import pandas as pd
+import requests
 
 app = Flask(__name__)
 
-@app.route('/get-merged-data', methods=['POST'])
-def get_data():
+@app.route('/auth', methods=['POST'])
+def auth():
     try:
         data = request.get_json()
-        username = data['username']
-        password = data['password']
-        plant_name = data['plant']
+        username = data.get('username')
+        password = data.get('password')
+
+        if not username or not password:
+            return jsonify({"auth": False, "error": "Eksik bilgi"}), 400
 
         eptr = EPTR2(username=username, password=password)
-        plants = eptr.call('pp-list', start_date="2024-04-01", end_date="2024-04-30")
-        match = plants[plants["shortName"] == plant_name.upper()]
-        if match.empty:
-            return jsonify({"error": "Santral bulunamadı"}), 404
+        _ = eptr.call('pp-list', start_date='2024-01-01', end_date='2024-01-02')
 
-        return jsonify({"message": f"Santral bulundu: ID={match.iloc[0]['id']}"})
+        return jsonify({"auth": True})
+
+    except requests.exceptions.HTTPError:
+        return jsonify({"auth": False})  # Giriş başarısız
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"auth": False, "error": str(e)}), 500
 
 if __name__ == '__main__':
-    app.run(host="0.0.0.0", port=10000)
+    app.run()
