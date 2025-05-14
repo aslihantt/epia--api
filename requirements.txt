@@ -1,5 +1,8 @@
 flask
-eptr2==1.0.4
-pandas
 gunicorn
 requests
+eptr2==1.0.4
+pandas
+numpy
+scikit-learn
+meteostat
