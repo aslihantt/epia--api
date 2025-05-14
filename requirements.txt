@@ -2,4 +2,4 @@ flask
 eptr2==1.0.4
 pandas
 gunicorn
-request
+requests
