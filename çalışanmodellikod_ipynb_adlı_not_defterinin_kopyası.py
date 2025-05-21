@@ -12,6 +12,11 @@ import requests
 
 app = Flask(__name__)
 
+# ✅ Kök URL'e yanıt verir
+@app.route('/', methods=['GET'])
+def index():
+    return "Yonca Production Prediction API is live!", 200
+
 @app.route('/auth', methods=['POST'])
 def auth():
     try:
@@ -42,10 +47,8 @@ def predict_production():
         plant_name = data.get("plant").strip().upper()
         city_name = data.get("city").strip()
 
-        # EPTR2 API giriş
         eptr = EPTR2(username=username, password=password)
 
-        # Santral ID bul
         today = datetime.today()
         start_date = (today - pd.DateOffset(months=9)).strftime("%Y-%m-%d")
         end_date = (today - timedelta(days=1)).strftime("%Y-%m-%d")
@@ -55,7 +58,6 @@ def predict_production():
             return jsonify({"error": "Santral bulunamadı"}), 404
         rt_pp_id = match.iloc[0]["id"]
 
-        # Santral üretim verisi (9 aylık)
         def fetch_chunks(eptr, rt_pp_id, start_date, end_date):
             current_start = pd.to_datetime(start_date)
             final_end = pd.to_datetime(end_date)
@@ -84,7 +86,6 @@ def predict_production():
         actual_df["hour"] = actual_df["dt"].dt.hour
         solar_df = actual_df[(actual_df["hour"] >= 3) & (actual_df["hour"] <= 17)][["dt", "sun_rt"]].rename(columns={"dt": "date", "sun_rt": "gunes"})
 
-        # Şehirden koordinat al → istasyon bul
         geolocator = Nominatim(user_agent="yonca-api")
         location = geolocator.geocode(city_name)
         if not location:
@@ -97,25 +98,21 @@ def predict_production():
             return jsonify({"error": "Hava durumu istasyonu bulunamadı"}), 404
         station_id = station.index[0]
 
-        # Hava durumu verisi (geçmiş 9 ay)
         weather = Hourly(station_id, pd.to_datetime(start_date), pd.to_datetime(end_date)).fetch()
         weather = weather[(weather.index.hour >= 3) & (weather.index.hour <= 17)]
         weather = weather.drop(columns=['snow', 'wdir', 'wpgt', 'tsun'], errors='ignore')
         weather = weather.reset_index().rename(columns={"time": "date"})
 
-        # Zaman düzenlemeleri
         solar_df["date"] = pd.to_datetime(solar_df["date"]).dt.tz_localize(None)
         weather["date"] = pd.to_datetime(weather["date"]).dt.tz_localize(None)
         solar_df["date"] = solar_df["date"].dt.floor("h")
         weather["date"] = weather["date"].dt.floor("h")
 
-        # Birleştir
         all_dates = pd.date_range(solar_df["date"].min(), solar_df["date"].max(), freq="h")
         merged = pd.DataFrame({"date": all_dates})
         merged = merged.merge(solar_df, on="date", how="left").merge(weather, on="date", how="left").interpolate().fillna(0)
         merged["hour"] = merged["date"].dt.hour
 
-        # G0 hesaplama
         G_sc = 1367
         merged["day_of_year"] = merged["date"].dt.dayofyear
         merged["epsilon"] = 1 + 0.033 * np.cos((2 * np.pi * merged["day_of_year"]) / 365)
@@ -131,7 +128,6 @@ def predict_production():
         rf = RandomForestRegressor(n_estimators=100)
         rf.fit(X_scaled, y)
 
-        # Bugünkü tahmin için hava verisi (03:00–17:00)
         start_future = datetime.now().replace(hour=3, minute=0, second=0, microsecond=0)
         end_future = start_future.replace(hour=17)
         future_weather = Hourly(station_id, start_future, end_future).fetch()
@@ -161,4 +157,4 @@ def predict_production():
         return jsonify({"error": str(e), "trace": traceback.format_exc()}), 500
 
 if __name__ == '__main__':
-    app.run()
+    app.run(debug=True)
