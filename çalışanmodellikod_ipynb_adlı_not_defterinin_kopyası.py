@@ -13,6 +13,12 @@ import requests
 
 app = Flask(__name__)
 
+# ✅ Root endpoint eklendi
+@app.route("/", methods=["GET"])
+def index():
+    return "Yonca Production Prediction API is running!", 200
+
+
 @app.route('/auth', methods=['POST'])
 def auth():
     try:
