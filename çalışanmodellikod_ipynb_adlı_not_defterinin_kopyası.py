@@ -46,7 +46,7 @@ def predict_production():
 
         eptr = EPTR2(username=username, password=password)
 
-        plants = eptr.call("pp-list", start_date="2024-04-01", end_date="2024-04-30")
+        plants = eptr.call("pp-list", start_date="2024-01-01", end_date="2024-12-31")
         match = plants[plants["shortName"] == plant_name]
         if match.empty:
             return jsonify({"error": "Santral bulunamadı"}), 404
@@ -72,7 +72,12 @@ def predict_production():
                 current_start = current_end + timedelta(days=1)
             return pd.concat(all_chunks, ignore_index=True) if all_chunks else pd.DataFrame()
 
-        actual_df = fetch_chunks(eptr, rt_pp_id, "2024-04-01", "2024-12-31")
+        # 🔄 Tarihi algılayıp son 3 ayın verisini al
+        today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        train_start = (today - pd.DateOffset(months=3)).strftime("%Y-%m-%d")
+        train_end = (today - timedelta(days=1)).strftime("%Y-%m-%d")
+
+        actual_df = fetch_chunks(eptr, rt_pp_id, train_start, train_end)
         if actual_df.empty:
             return jsonify({"error": "Üretim verisi alınamadı"}), 500
 
@@ -86,12 +91,11 @@ def predict_production():
             return jsonify({"error": "Hava durumu istasyonu bulunamadı"}), 404
         station_id = station.index[0]
 
-        weather = Hourly(station_id, datetime(2024, 4, 1), datetime(2024, 12, 31)).fetch()
+        weather = Hourly(station_id, pd.to_datetime(train_start), pd.to_datetime(train_end)).fetch()
         weather = weather[(weather.index.hour >= 3) & (weather.index.hour <= 17)]
         weather = weather.drop(columns=['snow', 'wdir', 'wpgt', 'tsun'], errors='ignore')
         weather = weather.reset_index().rename(columns={"time": "date"})
 
-        # ✅ Timezone'ları kaldır
         solar_df["date"] = pd.to_datetime(solar_df["date"]).dt.tz_localize(None)
         weather["date"] = pd.to_datetime(weather["date"]).dt.tz_localize(None)
 
@@ -118,8 +122,9 @@ def predict_production():
         rf = RandomForestRegressor(n_estimators=100)
         rf.fit(X_scaled, y)
 
-        start_future = datetime.now().replace(hour=3, minute=0, second=0, microsecond=0)
-        end_future = start_future.replace(hour=17)
+        # Tahmin için bugün 03:00–17:00 arası hava durumu
+        start_future = today.replace(hour=3)
+        end_future = today.replace(hour=17)
         future_weather = Hourly(station_id, start_future, end_future).fetch()
         future_weather = future_weather[(future_weather.index.hour >= 3) & (future_weather.index.hour <= 17)]
         future_weather = future_weather.drop(columns=['snow', 'wdir', 'wpgt', 'tsun'], errors='ignore')
@@ -145,6 +150,7 @@ def predict_production():
     except Exception as e:
         import traceback
         return jsonify({"error": str(e), "trace": traceback.format_exc()}), 500
+
 
 if __name__ == '__main__':
     app.run()
