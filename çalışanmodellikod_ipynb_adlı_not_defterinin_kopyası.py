@@ -9,8 +9,9 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 import requests
-
+from flask_cors import CORS
 app = Flask(__name__)
+CORS(app)
 
 # ✅ Kök URL'e yanıt verir
 @app.route('/', methods=['GET'])
