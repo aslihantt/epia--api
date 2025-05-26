@@ -147,10 +147,13 @@ def predict_production():
 
         total = round(float(future_weather["predicted_gunes"].sum()), 2)
         hourly = list(map(float, future_weather["predicted_gunes"].round(2).tolist()))
-
+        min_hourly = min(hourly)
+        max_hourly = max(hourly)
         return jsonify({
             "total_prediction": total,
-            "hourly_prediction": hourly
+            "hourly_prediction": hourly,
+            "minumum": min_hourly,
+            "maximum": max_hourly
         })
 
     except Exception as e:
